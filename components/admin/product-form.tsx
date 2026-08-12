@@ -12,8 +12,23 @@ import {
   type UploadedImage,
 } from "@/components/admin/image-uploader";
 import { adminFetch, AdminApiError } from "@/lib/admin/fetch";
+import { productCreateSchema } from "@/lib/validations";
 import { rupeesToPaise, paiseToRupees } from "@/lib/utils/money";
 import { slugify } from "@/lib/utils/cn";
+
+function formatValidationError(details: unknown): string | null {
+  if (!details || typeof details !== "object") return null;
+  const flat = details as {
+    fieldErrors?: Record<string, string[] | undefined>;
+    formErrors?: string[];
+  };
+  const fieldMessages = Object.entries(flat.fieldErrors ?? {}).flatMap(
+    ([field, messages]) =>
+      (messages ?? []).map((message) => `${field}: ${message}`),
+  );
+  const all = [...(flat.formErrors ?? []), ...fieldMessages];
+  return all[0] ?? null;
+}
 
 const AUDIENCES = ["WOMEN", "MEN", "GIRLS", "BOYS", "UNISEX"] as const;
 
@@ -131,15 +146,30 @@ export function ProductForm({ mode, categories, initial }: ProductFormProps) {
     setSaving(true);
 
     try {
+      if (!categoryId) {
+        setError("Select a category before saving.");
+        return;
+      }
+
       const priceInPaise = rupeesToPaise(Number(priceRupees) || 0);
       const compareAtPriceInPaise = compareAtRupees.trim()
         ? rupeesToPaise(Number(compareAtRupees) || 0)
         : null;
 
+      const productSku = sku.trim() || "SKU-1";
+      const validImages = images.filter((img) => {
+        try {
+          const parsed = new URL(img.url);
+          return parsed.protocol === "http:" || parsed.protocol === "https:";
+        } catch {
+          return false;
+        }
+      });
+
       const payload = {
         name: name.trim(),
         slug: (slug.trim() || autoSlug).trim(),
-        sku: sku.trim(),
+        sku: productSku,
         shortDescription: shortDescription.trim() || undefined,
         description: description.trim() || undefined,
         material: material.trim() || undefined,
@@ -154,16 +184,16 @@ export function ProductForm({ mode, categories, initial }: ProductFormProps) {
         isActive,
         seoTitle: seoTitle.trim() || undefined,
         seoDescription: seoDescription.trim() || undefined,
-        variants: variants.map((v) => ({
-          name: v.name.trim(),
-          value: v.value.trim(),
-          sku: v.sku.trim(),
+        variants: variants.map((v, index) => ({
+          name: v.name.trim() || "Size",
+          value: v.value.trim() || "One Size",
+          sku: v.sku.trim() || `${productSku}-V${index + 1}`,
           priceAdjustmentInPaise: Number(v.priceAdjustmentInPaise) || 0,
           stockOnHand: Number(v.stockOnHand) || 0,
           lowStockThreshold: Number(v.lowStockThreshold) || 0,
           isActive: v.isActive,
         })),
-        images: images.map((img, i) => ({
+        images: validImages.map((img, i) => ({
           url: img.url,
           altText: img.altText,
           sortOrder: i,
@@ -171,29 +201,37 @@ export function ProductForm({ mode, categories, initial }: ProductFormProps) {
         })),
       };
 
+      const localCheck = productCreateSchema.safeParse(payload);
+      if (!localCheck.success) {
+        const flat = localCheck.error.flatten();
+        setError(
+          formatValidationError(flat) ??
+            "Check required fields (SKU, category, variants).",
+        );
+        return;
+      }
+
       if (mode === "create") {
         await adminFetch<{ id: string }>("/api/admin/products", {
           method: "POST",
-          body: JSON.stringify(payload),
+          body: JSON.stringify(localCheck.data),
         });
         router.push("/admin/products");
         router.refresh();
       } else if (initial?.id) {
         await adminFetch(`/api/admin/products/${initial.id}`, {
           method: "PATCH",
-          body: JSON.stringify(payload),
+          body: JSON.stringify(localCheck.data),
         });
         router.push("/admin/products");
         router.refresh();
       }
     } catch (err) {
-      setError(
-        err instanceof AdminApiError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : "Could not save product",
-      );
+      if (err instanceof AdminApiError) {
+        setError(formatValidationError(err.details) ?? err.message);
+      } else {
+        setError(err instanceof Error ? err.message : "Could not save product");
+      }
     } finally {
       setSaving(false);
     }
@@ -234,8 +272,12 @@ export function ProductForm({ mode, categories, initial }: ProductFormProps) {
               id="sku"
               value={sku}
               onChange={(e) => setSku(e.target.value)}
+              placeholder="e.g. BRACELET-W-01"
               required
             />
+            <p className="text-xs text-[var(--color-espresso)]/55">
+              Use a unique code. Variant SKUs can match or use SKU-V1 style.
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="audience">Audience</Label>
@@ -258,17 +300,32 @@ export function ProductForm({ mode, categories, initial }: ProductFormProps) {
             <Label htmlFor="categoryId">Category</Label>
             <select
               id="categoryId"
-              className="flex h-11 w-full rounded-md border border-[var(--color-champagne)] bg-white px-3 text-sm"
+              className="flex h-11 w-full rounded-md border border-[var(--color-champagne)] bg-white px-3 text-sm text-[#161616]"
               value={categoryId}
               onChange={(e) => setCategoryId(e.target.value)}
               required
+              disabled={categories.length === 0}
             >
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
+              {categories.length === 0 ? (
+                <option value="">No categories yet</option>
+              ) : (
+                <>
+                  <option value="" disabled>
+                    Select a category
+                  </option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </>
+              )}
             </select>
+            {categories.length === 0 ? (
+              <p className="text-xs text-[var(--color-error)]">
+                Create categories in Admin → Categories first, then return here.
+              </p>
+            ) : null}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="price">Price (₹)</Label>

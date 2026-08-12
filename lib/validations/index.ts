@@ -45,16 +45,31 @@ export const adminLoginSchema = z.object({
   remember: z.boolean().optional(),
 });
 
+const skuSchema = z
+  .string()
+  .trim()
+  .min(1, "SKU is required")
+  .max(64, "SKU must be 64 characters or fewer");
+
+const httpsImageUrlSchema = z
+  .string()
+  .trim()
+  .url("Image must be a valid URL")
+  .refine(
+    (url) => /^https?:\/\//i.test(url),
+    "Image URL must start with http:// or https://",
+  );
+
 export const productCreateSchema = z.object({
   name: z.string().trim().min(2).max(160),
   slug: z.string().trim().min(2).max(180).optional(),
-  sku: z.string().trim().min(2).max(64),
+  sku: skuSchema,
   shortDescription: z.string().trim().max(300).optional(),
   description: z.string().trim().max(10000).optional(),
   material: z.string().trim().max(200).optional(),
   careInstructions: z.string().trim().max(2000).optional(),
   audience: z.enum(["WOMEN", "MEN", "GIRLS", "BOYS", "UNISEX"]),
-  categoryId: z.string().min(1),
+  categoryId: z.string().min(1, "Select a category"),
   priceInPaise: z.number().int().min(0),
   compareAtPriceInPaise: z.number().int().min(0).nullable().optional(),
   isFeatured: z.boolean().optional(),
@@ -68,18 +83,18 @@ export const productCreateSchema = z.object({
       z.object({
         name: z.string().trim().min(1).max(80),
         value: z.string().trim().min(1).max(80),
-        sku: z.string().trim().min(2).max(64),
+        sku: skuSchema,
         priceAdjustmentInPaise: z.number().int().default(0),
         stockOnHand: z.number().int().min(0).default(0),
         lowStockThreshold: z.number().int().min(0).default(5),
         isActive: z.boolean().optional(),
       }),
     )
-    .min(1),
+    .min(1, "Add at least one variant"),
   images: z
     .array(
       z.object({
-        url: z.string().url(),
+        url: httpsImageUrlSchema,
         altText: z.string().max(200).optional(),
         sortOrder: z.number().int().min(0).optional(),
         isPrimary: z.boolean().optional(),

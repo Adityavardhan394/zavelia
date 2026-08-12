@@ -76,6 +76,7 @@ export function ProductCard({ product, className }: ProductCardProps) {
               fill
               loading="lazy"
               quality={70}
+              unoptimized={!primary.url.includes("res.cloudinary.com")}
               className={cn(
                 "object-cover transition duration-500",
                 secondary && "group-hover:opacity-0",

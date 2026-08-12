@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Image from "next/image";
 import { Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +29,7 @@ type SignResponse = {
   timestamp: number;
   signature: string;
   folder: string;
+  allowedFormats?: string;
 };
 
 type ImageUploaderProps = {
@@ -46,7 +46,6 @@ export function ImageUploader({
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showUrlFallback, setShowUrlFallback] = useState(false);
   const [pasteUrl, setPasteUrl] = useState("");
 
   function appendImages(next: UploadedImage[]) {
@@ -85,6 +84,10 @@ export function ImageUploader({
         form.append("timestamp", String(signed.timestamp));
         form.append("signature", signed.signature);
         form.append("folder", signed.folder);
+        form.append(
+          "allowed_formats",
+          signed.allowedFormats || "jpg,png,webp,gif",
+        );
 
         const uploadRes = await fetch(
           `https://api.cloudinary.com/v1_1/${signed.cloudName}/image/upload`,
@@ -106,10 +109,9 @@ export function ImageUploader({
     } catch (err) {
       setError(
         err instanceof Error
-          ? `${err.message} You can paste an image URL below instead.`
-          : "Upload failed. Paste an image URL below instead.",
+          ? `${err.message} Paste a public image URL below instead.`
+          : "Upload failed. Paste a public image URL below instead.",
       );
-      setShowUrlFallback(true);
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -119,8 +121,14 @@ export function ImageUploader({
   function addPastedUrl() {
     const url = pasteUrl.trim();
     if (!url) return;
-    if (!/^https?:\/\//i.test(url)) {
-      setError("Enter a valid http(s) image URL.");
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        setError("Image URL must start with http:// or https://");
+        return;
+      }
+    } catch {
+      setError("Enter a valid image URL, e.g. https://images.unsplash.com/...");
       return;
     }
     setError(null);
@@ -168,16 +176,8 @@ export function ImageUploader({
           <Upload className="h-4 w-4" />
           {uploading ? "Uploading…" : "Upload images"}
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setShowUrlFallback((v) => !v)}
-        >
-          Paste URL
-        </Button>
         <p className="text-xs text-[var(--color-espresso)]/55">
-          JPEG/PNG/WebP/GIF · max 5 MB each
+          JPEG/PNG/WebP/GIF · max 5 MB · or paste a public image URL below
         </p>
         <input
           ref={inputRef}
@@ -195,24 +195,25 @@ export function ImageUploader({
         </p>
       ) : null}
 
-      {showUrlFallback ? (
-        <div className="space-y-1.5 rounded-md border border-[var(--admin-border)] bg-white/70 p-3">
-          <Label htmlFor="image-url">Image URL</Label>
-          <div className="flex flex-wrap gap-2">
-            <Input
-              id="image-url"
-              type="url"
-              placeholder="https://…"
-              value={pasteUrl}
-              onChange={(e) => setPasteUrl(e.target.value)}
-              className="min-w-[16rem] flex-1"
-            />
-            <Button type="button" variant="secondary" onClick={addPastedUrl}>
-              Add URL
-            </Button>
-          </div>
+      <div className="space-y-1.5 rounded-md border border-[var(--admin-border)] bg-white/70 p-3">
+        <Label htmlFor="image-url">Image URL</Label>
+        <div className="flex flex-wrap gap-2">
+          <Input
+            id="image-url"
+            type="url"
+            placeholder="https://images.unsplash.com/…"
+            value={pasteUrl}
+            onChange={(e) => setPasteUrl(e.target.value)}
+            className="min-w-[16rem] flex-1"
+          />
+          <Button type="button" variant="secondary" onClick={addPastedUrl}>
+            Add URL
+          </Button>
         </div>
-      ) : null}
+        <p className="text-xs text-[var(--color-espresso)]/55">
+          If Cloudinary is not set on Vercel, paste any public https image URL.
+        </p>
+      </div>
 
       {images.length > 0 ? (
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
@@ -222,16 +223,15 @@ export function ImageUploader({
               className="admin-card relative overflow-hidden"
             >
               <div className="relative aspect-square bg-[var(--color-champagne)]/30">
-                <Image
+                {/* Native img avoids Next remotePatterns blocking pasted hosts */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
                   src={img.url}
                   alt={img.altText || "Product image"}
-                  fill
-                  className="object-cover"
-                  sizes="160px"
-                  unoptimized={
-                    !img.url.includes("res.cloudinary.com") &&
-                    !img.url.startsWith("/")
-                  }
+                  className="absolute inset-0 h-full w-full object-cover"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.opacity = "0.25";
+                  }}
                 />
               </div>
               <div className="flex items-center justify-between gap-1 p-2">

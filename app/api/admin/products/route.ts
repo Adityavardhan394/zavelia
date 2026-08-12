@@ -51,11 +51,20 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const parsed = productCreateSchema.safeParse(body);
   if (!parsed.success) {
-    return fail("Invalid product data", {
-      status: 400,
-      code: "VALIDATION_ERROR",
-      details: parsed.error.flatten(),
-    });
+    const flat = parsed.error.flatten();
+    const fieldMessages = Object.entries(flat.fieldErrors)
+      .flatMap(([field, messages]) =>
+        (messages ?? []).map((message) => `${field}: ${message}`),
+      )
+      .concat(flat.formErrors);
+    return fail(
+      fieldMessages[0] ?? "Invalid product data",
+      {
+        status: 400,
+        code: "VALIDATION_ERROR",
+        details: flat,
+      },
+    );
   }
 
   const data = parsed.data;

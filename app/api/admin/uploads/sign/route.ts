@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   const paramsToSign = {
     timestamp,
     folder,
-    allowed_formats: "jpg,png,webp",
+    allowed_formats: "jpg,png,webp,gif",
   };
 
   const signature = cloudinary.utils.api_sign_request(paramsToSign, apiSecret);
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     timestamp,
     folder,
     signature,
+    allowedFormats: "jpg,png,webp,gif",
     maxFileSizeBytes: 5 * 1024 * 1024,
-    allowedFormats: ["image/jpeg", "image/png", "image/webp"],
   });
 }

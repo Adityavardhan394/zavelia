@@ -13,7 +13,7 @@ const securityHeaders: Record<string, string> = {
     "base-uri 'self'",
     "form-action 'self' https://wa.me",
     "frame-ancestors 'none'",
-    "img-src 'self' data: blob: https://res.cloudinary.com https://placehold.co https://images.unsplash.com",
+    "img-src 'self' data: blob: https:",
     "font-src 'self' data: https://fonts.gstatic.com",
     "style-src 'self' 'unsafe-inline'",
     "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
