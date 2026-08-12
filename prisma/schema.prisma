@@ -1,0 +1,306 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+}
+
+enum Audience {
+  WOMEN
+  MEN
+  GIRLS
+  BOYS
+  UNISEX
+}
+
+enum OrderStatus {
+  WHATSAPP_PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  UNPAID
+  COD_PENDING
+  PAID
+  REFUNDED
+}
+
+enum InventoryTransactionType {
+  STOCK_IN
+  STOCK_OUT
+  RESERVED
+  RELEASED
+  ADJUSTMENT
+  RETURNED
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         Role      @default(ADMIN)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  auditLogs             AuditLog[]
+  inventoryTransactions InventoryTransaction[]
+
+  @@index([email])
+  @@index([isActive])
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  imageUrl    String?
+  audience    Audience
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products Product[]
+
+  @@index([audience, isActive])
+  @@index([sortOrder])
+}
+
+model Product {
+  id                   String   @id @default(cuid())
+  name                 String
+  slug                 String   @unique
+  sku                  String   @unique
+  shortDescription     String?
+  description          String?
+  material             String?
+  careInstructions     String?
+  audience             Audience
+  categoryId           String
+  priceInPaise         Int
+  compareAtPriceInPaise Int?
+  isFeatured           Boolean  @default(false)
+  isNewArrival         Boolean  @default(false)
+  isBestSeller         Boolean  @default(false)
+  isActive             Boolean  @default(true)
+  seoTitle             String?
+  seoDescription       String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  category Category         @relation(fields: [categoryId], references: [id])
+  images   ProductImage[]
+  variants ProductVariant[]
+  orderItems OrderItem[]
+
+  @@index([categoryId])
+  @@index([audience, isActive])
+  @@index([isFeatured, isActive])
+  @@index([isNewArrival, isActive])
+  @@index([isBestSeller, isActive])
+  @@index([priceInPaise])
+}
+
+model ProductImage {
+  id        String   @id @default(cuid())
+  productId String
+  url       String
+  altText   String?
+  sortOrder Int      @default(0)
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, sortOrder])
+}
+
+model ProductVariant {
+  id                     String   @id @default(cuid())
+  productId              String
+  name                   String
+  value                  String
+  sku                    String   @unique
+  priceAdjustmentInPaise Int      @default(0)
+  stockOnHand            Int      @default(0)
+  stockReserved          Int      @default(0)
+  lowStockThreshold      Int      @default(5)
+  isActive               Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  product               Product                @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems            OrderItem[]
+  inventoryTransactions InventoryTransaction[]
+
+  @@index([productId, isActive])
+  @@index([stockOnHand])
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String
+  email     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  addresses Address[]
+  orders    Order[]
+
+  @@index([phone])
+  @@index([email])
+}
+
+model Address {
+  id           String   @id @default(cuid())
+  customerId   String
+  fullName     String
+  phone        String
+  addressLine1 String
+  addressLine2 String?
+  landmark     String?
+  city         String
+  state        String
+  postalCode   String
+  country      String   @default("India")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+}
+
+model Order {
+  id                        String        @id @default(cuid())
+  orderNumber               String        @unique
+  publicToken               String        @unique @default(cuid())
+  customerId                String
+  shippingAddressSnapshot   Json
+  status                    OrderStatus   @default(WHATSAPP_PENDING)
+  paymentStatus             PaymentStatus @default(UNPAID)
+  subtotalInPaise           Int
+  discountInPaise           Int           @default(0)
+  shippingInPaise           Int
+  totalInPaise              Int
+  customerNotes             String?
+  adminNotes                String?
+  idempotencyKey            String        @unique
+  stockReservationExpiresAt DateTime?
+  stockReleasedAt           DateTime?
+  whatsappOpenedAt          DateTime?
+  confirmedAt               DateTime?
+  shippedAt                 DateTime?
+  deliveredAt               DateTime?
+  cancelledAt               DateTime?
+  createdAt                 DateTime      @default(now())
+  updatedAt                 DateTime      @updatedAt
+
+  customer              Customer               @relation(fields: [customerId], references: [id])
+  items                 OrderItem[]
+  inventoryTransactions InventoryTransaction[]
+
+  @@index([status, createdAt])
+  @@index([paymentStatus])
+  @@index([customerId])
+  @@index([stockReservationExpiresAt, status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id               String   @id @default(cuid())
+  orderId          String
+  productId        String?
+  variantId        String?
+  productName      String
+  productSlug      String
+  sku              String
+  variantName      String
+  quantity         Int
+  unitPriceInPaise Int
+  lineTotalInPaise Int
+  productImageUrl  String?
+  createdAt        DateTime @default(now())
+
+  order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([productId])
+  @@index([variantId])
+}
+
+model InventoryTransaction {
+  id                    String                    @id @default(cuid())
+  variantId             String
+  orderId               String?
+  type                  InventoryTransactionType
+  quantity              Int
+  previousStockOnHand   Int
+  newStockOnHand        Int
+  previousStockReserved Int
+  newStockReserved      Int
+  reason                String?
+  performedByUserId     String?
+  createdAt             DateTime                  @default(now())
+
+  variant     ProductVariant @relation(fields: [variantId], references: [id])
+  order       Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  performedBy User?          @relation(fields: [performedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([variantId, createdAt])
+  @@index([orderId])
+  @@index([type, createdAt])
+}
+
+model SiteSettings {
+  id                           String   @id @default(cuid())
+  storeName                    String   @default("ZAVÉLIA")
+  tagline                      String   @default("Elegance For Every You")
+  whatsappDisplayNumber        String?
+  supportEmail                 String?
+  supportPhone                 String?
+  businessAddress              String?
+  freeShippingThresholdInPaise Int      @default(30000)
+  standardShippingInPaise      Int      @default(4900)
+  instagramUrl                 String?
+  facebookUrl                  String?
+  isStoreOpen                  Boolean  @default(true)
+  announcementText             String?  @default("FREE shipping on orders of ₹300 and above")
+  updatedAt                    DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}

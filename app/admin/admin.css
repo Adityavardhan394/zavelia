@@ -1,0 +1,47 @@
+.admin-root {
+  --color-ivory: #f7efe5;
+  --color-champagne: #e8d1ba;
+  --color-rose-gold: #b88968;
+  --color-espresso: #35251f;
+  --color-charcoal: #1a1210;
+  --color-error: #9b2c2c;
+  --color-success: #2f6b4f;
+  --color-warning: #9a6b2f;
+  --admin-sidebar: #35251f;
+  --admin-sidebar-muted: rgba(247, 239, 229, 0.72);
+  --admin-border: color-mix(in srgb, var(--color-champagne) 70%, var(--color-espresso) 10%);
+  color: var(--color-espresso);
+  background: var(--color-ivory);
+  font-family: var(--font-admin-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+.admin-root h1,
+.admin-root h2,
+.admin-root h3,
+.admin-brand {
+  font-family: var(--font-admin-display), ui-serif, Georgia, serif;
+}
+
+.admin-root .admin-card {
+  border: 1px solid var(--admin-border);
+  background: #fffefb;
+  border-radius: 0.5rem;
+}
+
+@media print {
+  .admin-no-print {
+    display: none !important;
+  }
+
+  .admin-print-only {
+    display: block !important;
+  }
+
+  .admin-root {
+    background: white;
+  }
+}
+
+.admin-print-only {
+  display: none;
+}
