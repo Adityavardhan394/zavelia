@@ -29,11 +29,24 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await signIn("credentials", {
+    const result = await signIn("credentials", {
       email: parsed.data.email,
       password: parsed.data.password,
       redirect: false,
     });
+
+    // Auth.js returns an error URL for failed credential sign-ins when
+    // redirects are disabled; it does not throw in that case.
+    if (
+      typeof result === "string" &&
+      new URL(result, request.url).searchParams.has("error")
+    ) {
+      return fail("Invalid email or password", {
+        status: 401,
+        code: "UNAUTHORIZED",
+      });
+    }
+
     console.info("Admin login success", {
       email: maskEmail(parsed.data.email),
     });
